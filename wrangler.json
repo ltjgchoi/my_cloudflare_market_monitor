@@ -1,0 +1,12 @@
+{
+  "name": "chois-market-monitor",
+  "main": "cloudflare-worker-dashboard.js",
+  "compatibility_date": "2024-04-03",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "daily-metrics-db",
+      "database_id": "84c3b81a-3d72-4720-bd1e-31fb170b3e37"
+    }
+  ]
+}
