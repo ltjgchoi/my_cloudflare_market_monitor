@@ -142,19 +142,25 @@ async function getLatestMetrics(request, env) {
       FROM RankedMetrics r1
       LEFT JOIN RankedMetrics r2 ON r1.metric_key = r2.metric_key AND r2.rn = 2
       WHERE r1.rn = 1
-      ORDER BY 
-        CASE r1.metric_key
-          WHEN 'S&P500' THEN 1
-          WHEN '코스피' THEN 2
-          WHEN 'USD/KRW' THEN 3
-          WHEN '달러인덱스' THEN 4
-          WHEN 'WTI' THEN 5
-          WHEN 'US HY Spread' THEN 6
-          ELSE 7
-        END, r1.metric_key ASC
+      ORDER BY r1.metric_key ASC
     `
     const { results } = await env.DB.prepare(query).bind(targetDate).all()
-    
+
+    // metrics_key_ticker_map 테이블에서 priority 조회 (테이블 없으면 무시)
+    let priorityMap = {}
+    try {
+      const priorityResult = await env.DB.prepare(
+        `SELECT metric_key, priority FROM metric_key_ticker_map`
+      ).all()
+      for (const row of priorityResult.results) {
+        if (row.metric_key != null && row.priority != null) {
+          priorityMap[row.metric_key] = row.priority
+        }
+      }
+    } catch (_) {
+      // metrics_key_ticker_map 테이블이 없으면 기본 정렬 유지
+    }
+
     const formatted = results.map(row => {
       const latest = row.latest_value ?? 0
       const prev = row.prev_value ?? latest
@@ -172,6 +178,16 @@ async function getLatestMetrics(request, env) {
         change_percent: changePercent
       }
     })
+
+    // priority 순서로 정렬 (metrics_key_ticker_map이 있을 때만 적용)
+    if (Object.keys(priorityMap).length > 0) {
+      formatted.sort((a, b) => {
+        const pa = priorityMap[a.metric_key] ?? Number.MAX_SAFE_INTEGER
+        const pb = priorityMap[b.metric_key] ?? Number.MAX_SAFE_INTEGER
+        if (pa !== pb) return pa - pb
+        return a.metric_key.localeCompare(b.metric_key)
+      })
+    }
 
     return jsonResponse(formatted)
   } catch (error) {
